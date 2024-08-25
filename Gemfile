@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # See https://pages.github.com/versions/
-gem "github-pages", ">= 231", group: [:jekyll_plugins]
+gem "github-pages", ">= 232", group: [:jekyll_plugins]
 
 # Force certain dependencies that may be upgraded to an unsupported version for Ruby 2.7 otherwise.
 gem "nokogiri", "~> 1.16.5"
