@@ -7,7 +7,7 @@ gem "github-pages", ">= 232", group: [:jekyll_plugins]
 gem "nokogiri", "~> 1.16.5"
 gem "webrick", "~> 1.8"
 gem 'csv', '~> 3.3'
-gem 'faraday-retry', '~> 2.2', '>= 2.2.1'
+gem 'faraday-retry', '~> 2.3', '>= 2.3.0'
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: [:mingw, :mswin, :x64_mingw, :jruby]
