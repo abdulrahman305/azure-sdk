@@ -25,6 +25,8 @@ parameters:
       Language: js
     azure-sdk-for-python:
       Language: python
+    azure-sdk-for-rust:
+      Language: rust
 
 steps:
   - pwsh: |
@@ -35,9 +37,17 @@ steps:
 
         # Add any overrides for months where the release week isn't the second friday of the month
         # These entries can be cleaned up after we are more than one month past the exception month.
-        if ($d.Year -eq 2024 -and $d.Month -eq 1)
+        if ($d.Year -eq 2025 -and $d.Month -eq 1)
         {
-          $secondFridayOfMonth = [DateTime]"2024-01-19"
+          $secondFridayOfMonth = [DateTime]"2025-01-17"
+        }
+        elseif ($d.Year -eq 2025 -and $d.Month -eq 7)
+        {
+          $secondFridayOfMonth = [DateTime]"2025-07-18"
+        }
+        elseif ($d.Year -eq 2025 -and $d.Month -eq 9)
+        {
+          $secondFridayOfMonth = [DateTime]"2025-09-19"
         }
 
         return $secondFridayOfMonth
@@ -46,7 +56,7 @@ steps:
       $today = Get-Date
       $releaseFriday = GetFridayOfReleaseWeek $today
 
-      # Move to next month's release period but still collect notes from the second friday fo this month.
+      # Move to next month's release period but still collect notes from the second friday for this month.
       if ($today -gt $releaseFriday) {
         $releasePeriod = $today.AddMonths(1)
         $releaseStartDate = $releaseFriday
@@ -114,7 +124,6 @@ steps:
         arguments: >
           -releasePeriod $(ReleasePeriod)
           -releaseStartDate $(ReleaseStartDate)
-          -commonScriptPath ./eng/common/scripts
           -releaseDirectory $(AzureSDKReleaseNotesClonePath)/_data/releases
           -repoLanguage ${{ repo.value.Language }}
           -github_pat '$(azuresdk-github-pat)'

@@ -120,16 +120,32 @@ error[E0252]: the name `Client` is defined multiple times
    |
 1  |     use azure_storage_blob::Client;
    |         ----------- previous import of the type `Client` here
-2  |     use azure_security_keyvault::secrets::Client;
+2  |     use azure_security_keyvault_secrets::Client;
    |         ^^^^^^^^^^^ `Client` reimported here
    |
 ```
 
-{% include requirement/SHOULD id="rust-client-namespace" %} place service client types that the consumer is most likely to interact with in the root module of the client library e.g., `azure_security_keyvault`. Specialized service clients should be placed in submodules e.g., `azure_security_keyvault::secrets`.
+{% include requirement/MUST id="rust-client-namespace" %} export all service client and their client options that the consumer can create and is most likely to interact with in the root module of the client library e.g., `azure_security_keyvault_secrets`.
+
+{% include requirement/MUST id="rust-client-clients-module" %} export all clients, subclients, and their client options from a `clients` submodule of the crate root e.g., `azure_security_keyvault_secrets::clients`. Clients that can be created directly as described above should be re-exported from the crate root.
+
+{% include requirement/MUST id="rust-client-models-module" %} export all models and client method options from a `models` submodule of the crate root e.g., `azure_security_keyvault_secrets::models` e.g.,
+
+```rust
+// lib.rs
+pub mod clients;
+pub mod models;
+
+pub use clients::SecretClient;
+```
+
+See [Rust modules][rust-modules] for more information.
 
 {% include requirement/MUST id="rust-client-immutable" %} ensure that all service client methods are thread safe (usually by making them immutable and stateless).
 
 {% include requirement/MUST id="rust-client-endpoint" %} define a public `endpoint(&self) -> &azure_core::Url` method to get the endpoint used to create the client.
+
+{% include requirement/MUST id="rust-client-internal-fields" %} define all fields within a client struct with `pub(crate)` accessibility. This allows the fields e.g., the `pipeline`, to be used in [convenience clients' extension methods][rust-client-convenience].
 
 #### Service Client Constructors {#rust-client-constructors}
 
@@ -154,79 +170,40 @@ In cases when different credential types are supported, we want the primary use 
 
 ##### Client Configuration {#rust-client-configuration}
 
+Client options should be plain old data structures to allow easy, idiomatic creation of options and to easily share these options across multiple clients as needed.
+
 {% include requirement/MUST id="rust-client-configuration-name" %} define a client options struct with the same as the client name + "Options" e.g., a `SecretClient` takes a `SecretClientOptions`.
 
-{% include requirement/SHOULD id="rust-client-configuration-namespace" %} place client option structs in the root module of the client library e.g., `azure_security_keyvault`. Specialized clients options should be placed in submodules e.g., `azure_security_keyvault::secrets`.
+{% include requirement/SHOULD id="rust-client-configuration-namespace" %} export client option structs from the same module(s) from which clients and subclients are exported e.g., `azure_security_keyvault_secrets` and `azure_security_keyvault_secrets::clients` for `SecretClient`.
 
-{% include requirement/MUST id="rust-client-configuration-fields" %} define all client-specific fields of client option structs as private and of type `Option<T>`.
+See [Rust modules][rust-modules] for more information.
 
-{% include requirement/MUST id="rust-client-configuration-fields-options" %} define an `client_options: azure_core::ClientOptions` private field.
+{% include requirement/MUST id="rust-client-configuration-fields" %} define all client-specific fields of client option structs as public and of type `Option<T>` except for `api_version` of type `String`, if applicable.
+
+{% include requirement/MUST id="rust-client-configuration-fields-options" %} define an `client_options: azure_core::ClientOptions` public field.
 
 {% include requirement/MUST id="rust-client-configuration-clone" %} derive `Clone` to support cloning client configuration for other clients.
 
-{% include requirement/MUST id="rust-client-configuration-debug" %} derive `Debug` to support printing members for diagnostics purposes.
+{% include requirement/SHOULDNOT id="rust-client-configuration-debug" %} derive `Debug` since this may inadvertently leak PII. Derive [`azure_core::fmt::SafeDebug`][rust-safety-debug] instead.
 
-{% include requirement/MUST id="rust-client-configuration-default" %} implement `Default` to support creating default client configuration including the default `api-version` used when calling into the service.
-
-{% include requirement/MUST id="rust-client-configuration-builder-derive" %} derive `azure_core::ClientOptionsBuilders` to automatically implement builder setters for `azure_core::ClientOptions`.
-
-{% include requirement/MUST id="rust-client-configuration-builder-function" %} define a `builder()` associated function that does not take `self` and that returns an instance of its associated builder as defined below.
-
-{% include requirement/MUST id="rust-client-configuration-builder" %} implement an client options builder to construct options with the same name as the options struct + "Builder" e.g., `SecretClientOptionsBuilder`.
-
-{% include requirement/MUST id="rust-client-configuration-builder-namespace" %} place client option builders in submodule of the root named `builders` e.g., `azure_security_keyvault::builders`. Specialized clients options should be placed in submodules e.g., `azure_security_keyvault::secrets::builders`.
-
-{% include requirement/MUST id="rust-client-configuration-builder-methods" %} define builder setters using the "with_" prefix, take a `mut self`, and return `Self`.
-
-{% include requirement/MUST id="rust-client-configuration-builder-methods-build" %} define a `build(&self)` method that borrows self and returns the associated client options struct. This allows creating multiple client options structs from a single builder, or even updating the builder to create variants.
+{% include requirement/MUST id="rust-client-configuration-default" %} implement `Default` to support creating default client configuration including the default `api_version` used when calling into the service.
 
 The requirements above would define an example client options struct like:
 
 ```rust
-use azure_core::{ClientOptions, ClientOptionsBuilder};
+use azure_core::{ClientOptions, fmt::SafeDebug};
 
-#[derive(ClientOptions, Clone, Debug)]
+#[derive(Clone, SafeDebug)]
 pub struct SecretClientOptions {
-    api_version: Option<String>,
-    client_options: ClientOptions,
-}
-
-impl SecretClientOptions {
-    pub fn builder() -> builders::SecretClientOptionsBuilder {
-        builders::SecretClientOptionsBuilder::new()
-    }
+    pub api_version: String,
+    pub client_options: ClientOptions,
 }
 
 impl Default for SecretClientOptions {
     fn default() -> Self {
         Self {
-            api_version: Some("7.5".to_string()),
+            api_version: "7.5".to_string(),
             options: ClientOptions::default(),
-        }
-    }
-}
-
-pub mod builders {
-    use super::*;
-
-    pub struct SecretClientOptionsBuilder {
-        options: SecretClientOptions,
-    }
-
-    impl SecretClientOptionsBuilder {
-        pub(super) fn new() -> Self {
-            Self {
-                options: SecretClientOptions::default(),
-            }
-        }
-
-        pub fn with_api_version(mut self , api_version: impl Into<String>) -> Self {
-            self.options.api_version = Some(api_version.into());
-            self
-        }
-
-        pub fn build(&self) -> SecretClientOptions {
-            self.options.clone()
         }
     }
 }
@@ -251,51 +228,7 @@ pub mod builders {
 
 ##### Mocking {#rust-client-mocking}
 
-{% include requirement/MUST id="rust-client-mocking-trait-name" %} define a trait named after the client name + "Methods" e.g., `SecretClientMethods`.
-
-{% include requirement/MUST id="rust-client-mocking-trait-namespace" %} place these traits in the root module e.g., `azure_storage_blobs` or `azure_security_keyvault::secrets` so they are automatically discoverable by the Language Server Protocol (LSP).
-
-{% include requirement/MUST id="rust-client-mocking-trait-methods" %} implement all methods of the client methods trait on the client which have the body `unimplemented!()` or `std::future::ready(unimplemented!())` for async methods e.g.,
-
-```rust
-pub trait SecretClientMethods {
-    fn endpoint(&self) -> &Url {
-        unimplemented!()
-    }
-
-    async fn set_secret(
-        &self,
-        _name: impl Into<String>,
-        _version: impl Into<String>,
-        _options: Option<SetSecretMethodOptions>,
-    ) -> azure_core::Result<Response> {
-        std::future::ready(unimplemented!())
-    }
-}
-
-pub struct SecretClient {
-    // ...
-}
-
-impl SecretClient {
-    // pub fn new(..) -> Result<Self>
-}
-
-impl SecretClientMethods for SecretClient {
-    fn endpoint(&self) -> &Url {
-        todo!()
-    }
-
-    async fn set_secret(
-        &self,
-        name: impl Into<String>,
-        version: impl Into<String>,
-        options: Option<SetSecretMethodOptions>,
-    ) -> azure_core::Result<Response> {
-        todo!()
-    }
-}
-```
+> We are reevaluating options for mocking to provide the best experience for API consumers whether or not they plan to utilize mocks or fakes.
 
 #### Service Methods {#rust-client-methods}
 
@@ -303,84 +236,42 @@ impl SecretClientMethods for SecretClient {
 
 {% include requirement/MUST id="rust-client-methods-params" %} use the service specified name of all parameters.
 
-{% include requirement/MUST id="rust-client-methods-configuration-name" %} define a client method options struct with the same as the client, client method name, and "Options" e.g., a `set_secret` takes an `Option<SecretClientSetSecretOptions>` as the last parameter.
+{% include requirement/MUST id="rust-client-methods-configuration-name" %} define a client method options struct with the same name as the client, client method name, and "Options" e.g., a `set_secret` takes an `Option<SecretClientSetSecretOptions>` as the last parameter.
 This is required even if the service method does not currently take any options because - should it ever add options - the client method signature does not have to change and will not break callers.
 
-{% include requirement/SHOULD id="rust-client-methods-configuration-namespace" %} place client method option structs in the root module of the client library e.g., `azure_security_keyvault`. Specialized clients options should be placed in submodules e.g., `azure_security_keyvault::secrets`.
+{% include requirement/MUST id="rust-client-methods-configuration-namespace" %} export client method option structs from the `models` module e.g., `azure_security_keyvault_secrets::models`.
 
-{% include requirement/MUST id="rust-client-methods-configuration-fields" %} define all client method-specific fields of method option structs as private and of type `Option<T>`.
+See [Rust modules][rust-modules] for more information.
 
-{% include requirement/MUST id="rust-client-methods-configuration-fields-options" %} define a `method_options: azure_core::ClientMethodOptions` private field.
+{% include requirement/MUST id="rust-client-methods-configuration-fields" %} define all client method-specific fields of method option structs as public and of type `Option<T>`.
+
+{% include requirement/MUST id="rust-client-methods-configuration-fields-options" %} define a `method_options: azure_core::ClientMethodOptions` public field.
 
 {% include requirement/MUST id="rust-client-methods-configuration-clone" %} derive `Clone` to support cloning method configuration for additional client method invocations.
 
-{% include requirement/MUST id="rust-client-methods-configuration-debug" %} derive `Debug` to support printing members for diagnostics purposes.
+{% include requirement/MUST id="rust-client-methods-configuration-debug" %} derive `Debug` since this may inadvertently leak PII. Derive [`azure_core::fmt::SafeDebug`][rust-safety-debug] instead.
 
 {% include requirement/MUST id="rust-client-methods-configuration-default" %} derive or implement `Default` to support creating default method configuration.
-
-{% include requirement/MUST id="rust-client-methods-configuration-builder-derive" %} derive `azure_core::ClientMethodOptionsBuilders` to automatically implement builder setters for `azure_core::ClientMethodOptions`.
-
-{% include requirement/MUST id="rust-client-methods-configuration-builder-function" %} define a `builder()` associated function that does not take `self` and that returns an instance of its associated builder as defined below.
-
-{% include requirement/MUST id="rust-client-methods-configuration-builder" %} implement an method options builder to construct options with the same name as the options struct + "Builder" e.g., `SecretClientSetSecretOptions`.
-
-{% include requirement/MUST id="rust-client-methods-configuration-builder-namespace" %} place method option builders in submodule of the root named `builders` e.g., `azure_security_keyvault::builders`. Specialized clients options should be placed in submodules e.g., `azure_security_keyvault::secrets::builders`.
-
-{% include requirement/MUST id="rust-client-methods-configuration-builder-methods" %} define builder setters using the "with_" prefix, take a `mut self`, and return `Self`.
-
-{% include requirement/MUST id="rust-client-methods-configuration-builder-methods-build" %} define a `build(&self)` method that borrows self and returns the associated method options struct. This allows creating multiple method options structs from a single builder, or even updating the builder to create variants.
 
 The requirements above would define an example client options struct like:
 
 ```rust
-use azure_core::{ClientMethodOptions, ClientMethodOptionsBuilder};
+use azure_core::{ClientMethodOptions, fmt::SafeDebug};
 
 impl SecretClientMethods for SecretClient {
     async fn set_secret(
         &self,
-        name: impl Into<String>,
-        value: impl Into<String>,
+        name: &str,
         options: Option<SecretClientSetSecretOptions>,
     ) -> azure_core::Result<Response<KeyVaultSecret>> {
         todo!()
     }
 }
 
-#[derive(ClientMethodOptions, Clone, Debug, Default)]
+#[derive(Clone, SafeDebug, Default)]
 pub struct SecretClientSetSecretOptions {
-    enabled: Option<bool>,
-    method_options: ClientMethodOptions,
-}
-
-impl SecretClientSetSecretOptions {
-    pub fn builder() -> builders::SecretClientSetSecretOptionsBuilder {
-        builders::SecretClientSetSecretOptionsBuilder::new()
-    }
-}
-
-pub mod builders {
-    use super::*;
-
-    pub struct SecretClientSetSecretOptionsBuilder {
-        options: SecretClientSetSecretOptions,
-    }
-
-    impl SecretClientSetSecretOptionsBuilder {
-        pub(super) fn new() -> Self {
-            Self {
-                options: SecretClientSetSecretOptions::default(),
-            }
-        }
-
-        pub fn with_enabled(mut self, enabled: bool) -> Self {
-            self.options.enabled = Some(enabled);
-            self
-        }
-
-        pub fn build(&self) -> SecretClientSetSecretOptions {
-            self.options.clone()
-        }
-    }
+    pub enabled: Option<bool>,
+    pub method_options: ClientMethodOptions,
 }
 ```
 
@@ -397,14 +288,24 @@ to wait synchronously on a `Future`.
 
 {% include requirement/MUST id="rust-client-methods-naming-case" %} use snake_case method names converted from likely either camelCase or PascalCase declared in the service specification e.g., `getResource` would be declared as `get_resource`.
 
-{% include requirement/MUST id="rust-client-methods-naming-list" %} use the `list_` prefix for service methods that return one or more pages containing a list of resources e.g., `list_properties_of_secrets()`.
+{% include requirement/MUST id="rust-client-methods-naming-verbs" %} use the following verb patterns for CRUD operations:
+
+| Pattern       | HTTP Method  | Comments
+| ------------- | ------------ | --------
+| add_{noun}    | POST or PUT  | Add a resource to a collection. Fails if the resource exists.
+| delete_{noun} | DELETE       | Delete a resource. Does not fail if the resource does not exist.
+| get_{noun}    | GET          | Get a resource. Fails if the resource does not exist.
+| list_{noun}   | GET          | {#rust-client-methods-naming-list} Get a collection of resources. May be in zero or may pages of results. Returns an empty list if no resources exist.
+| {noun}_exists | GET or HEAD  | Check if a resource exists.
+| set_{noun}    | POST or PUT  | Adds a new or updates an existing resource.
+| update_{noun} | PATCH or PUT | Updates existing resources. Fails if resource does not exist.
 
 {% include requirement/MUST id="rust-client-methods-naming-conversion-prefix" %} use the following prefixes in the described scenarios:
 
 | Prefix | Scenario | Example |
 | ------ | -------- | ------- |
 | (none) | field getter | `field_name(&self) -> FieldType` |
-| `with_` | field setter returning `Self` - typically used in builders | `with_field_name(&mut self, value: FieldType) -> &mut Self` |
+| `with_` | [non-default constructor](#rust-client-constructors-multiple-credentials) or field setter returning `Self` - typically used in builders | `with_field_name(&mut self, value: FieldType) -> &mut Self` |
 | `set_` | field setter returning nothing or anything else | `set_field_name(&mut self, value: FieldType)` |
 
 ##### Operation Options {#rust-client-methods-options}
@@ -449,6 +350,41 @@ impl<T> Response<T> {
 
 This is equivalent to returning an `impl Future<Output = azure_core::Result<azure_core::Response<T>>>` from an `fn`.
 
+{% include requirement/MUST id="rust-client-methods-return-headers-methods" %} must export extension method traits for defined headers from the `models` module on `Response<T>` where `T` is a model type.
+If the method does not return a model and would other return the unit type `Response<()>`, you should instead return an empty struct using the same naming convention has options: client name + method name + "Result" e.g.,
+
+```rust
+#[derive(SafeDebug)]
+pub struct SecretClientSetSecretResult;
+```
+
+This should be treated as a model, so derive the same traits and export from `models` as you would any other model.
+
+{% include requirement/MUST id="rust-client-methods-return-headers-methods-name" %} name the trait similar to options: client name + method name + "Ext" e.g., `SecretClientSetSecretExt`.
+
+{% include requirement/MUST id="rust-client-methods-return-headers-methods-return" %} return an `azure_core::Result<Option<T>>` where `T` is an appropriate type for the header e.g., `usize` for `content-length`, `azure_core::Etag` for etags, etc.
+The implementation can simply call methods like `Headers::get_optional_as()` or `Headers::get_optional_string()` as appropriate.
+
+{% include requirement/MUST id="rust-client-methods-return-headers-methods-sealed" %} seal the trait to prevent it from being implemented by other types as shown in the example below.
+Implementations should use a single definition of `private::Sealed` for all such traits that require it.
+
+```rust
+pub trait SecretClientSetSecretExt: private::Sealed {
+    fn content_type_header(&self) -> azure_core::Result<Option<String>>;
+}
+
+impl SecretClientSetSecretExt for Response<SecretBundle> {
+    fn content_type_header(&self) -> azure_core::Result<Option<String>> {
+        Ok(self.headers().get_optional_string(&headers::CONTENT_TYPE))
+    }
+}
+
+mod private {
+    pub trait Sealed {}
+    impl Sealed for Response<SecretBundle> {}
+}
+```
+
 ##### Cancellation {#rust-client-methods-cancellation}
 
 Cancelling an asynchronous method call in Rust is done by dropping the `Future`.
@@ -460,41 +396,19 @@ Various extensions also exist that the caller may use that may otherwise not wor
 
 {% include requirement/MUST id="rust-parameters-self" %} take a `&self` as the first parameter. All service clients must be immutable
 
-{% include requirement/MUST id="rust-parameters-into" %} declare parameter types as `impl Into<T>` where `T` is a common `std` type that implements `Into<T>` e.g., `String` when the parameter data will be owned.
-
-This will be most common when the data passed to a function will be stored in a struct e.g.:
-
-```rust
-pub struct SecretClientOptions {
-    api_version: String,
-}
-
-impl SecretClientOptions {
-    pub fn new(api_version: impl Into<String>) -> Self {
-        Self {
-            api_version: api_version.into(),
-        }
-    }
-}
-```
-
-This allows callers to pass a `String` or `str` e.g., `SecretClientOptions::new("7.4")`.
-
-{% include requirement/MUST id="rust-parameter-asref" %} declare parameter types as `impl AsRef<T>` where `T` is a common `std` reference type that implements `AsRef<T>` e.g., `str`, when the parameter data is merely borrowed.
-
-This is useful when the parameter data is temporary, such as allowing a `str` endpoint to be passed that will be parsed into an `azure_core::Url` e.g.:
+{% include requirement/MUST id="rust-parameters-into" %} declare parameter types as reference types e.g., `&str` (or any reference to type `&T`)` when the data only needs to be borrowed e.g., a URL parameter.
 
 ```rust
 impl SecretClient {
-    pub fn new(endpoint: impl AsRef<str>) -> Result<Self> {
-        let endpoint = azure_core::Url::parse(endpoint.as_ref())?;
+    pub fn new(endpoint: &str) -> Result<Self> {
+        let endpoint = azure_core::Url::parse(endpoint)?;
 
         todo!()
     }
 }
 ```
 
-The `endpoint` parameter is never saved so a reference is fine. This also allows callers to pass a `String` or `str` e.g., `SecretClient::new("https://myvault.vault.azure.net")`.
+The `endpoint` parameter is never saved so a reference is fine. Except for possible body parameters, any parameter should typically be borrowed since required parameters comprise URL path segments or query parameters.
 
 {% include requirement/MUST id="rust-parameters-request-content" %} declare a parameter named `content` of type `RequestContent<T>`, where `T` is the service-defined request model.
 
@@ -547,7 +461,9 @@ The `azure_core` crate exposes an abstract type called `azure_core::Poller<T>`, 
 {% include requirement/MUST id="rust-etag-options" %} define ETag-related options e.g., `if_match`, `if_none_match`, etc., in the service method options e.g.:
 
 ```rust
-#[derive(Clone, Debug)]
+use azure_core::SafeDebug;
+
+#[derive(Clone, SafeDebug)]
 pub struct SetSecretOptions {
     enabled: Option<bool>,
     if_match: Option<azure_core::ETag>,
@@ -556,9 +472,17 @@ pub struct SetSecretOptions {
 
 ##### Hierarchical Clients {#rust-subclients}
 
+Subclients can only be returned by other clients and cannot be constructed by developers using our crates. See [General Azure SDK Terminology] general guidelines.
+
 {% include requirement/MAY id="rust-subclients-return" %} return clients from other clients e.g., a `DatabaseClient` from a `CosmosClient`.
 
+{% include requirement/MUSTNOT id="rust-subclients-create" %} define constructors on subclients. They must be constructed only from other clients.
+
 {% include requirement/MUST id="rust-subclients-suffix" %} name all client methods returning a client with the `_client` suffix e.g., `CosmosClient::database_client()`.
+
+{% include requirement/MUSTNOT id="rust-subclients-export" %} export subclients from the crate root. They should be exported from a `clients` submodule of the crate root example `azure_security_keyvault_secrets::clients`.
+
+See [Rust modules][rust-modules] for more information.
 
 {% include requirement/MUSTNOT id="rust-subclients-noasync" %} define client methods returning a client as asynchronous.
 
@@ -576,15 +500,30 @@ This section describes guidelines for the design _model types_ and all their tra
 
 {% include requirement/MUST id="rust-model-types-serde" %} derive or implement `serde::Serialize` and/or `serde::Deserialize` as appropriate i.e., if the model is input (serializable), output (deserializable), or both.
 
+{% include requirement/MUST id="rust-model-types-serde" %} derive or implement `azure_core::Model` for HTTP response models. Your crate must also have a direct dependency on `typespec_client_core`.
+
+{% include requirement/MUST id="rust-model-types-serde" %} attribute models with `#[typespec(format = "...")]` if the response containing the model uses a format **other** than JSON.
+
+```rust
+#[derive(azure_core::Model)]
+#[typespec(format = "xml")]
+struct Example {
+    pub foo: String
+}
+```
+
 {% include requirement/MUST id="rust-model-types-public" %} define all fields as `pub`.
 
-{% include requirement/MUST id="rust-model-types-optional" %} define all fields using `Option<T>`.
+{% include requirement/MUST id="rust-model-types-optional" %} define all non-vector fields using `Option<T>`.
+
+{% include requirement/MUST id="rust-model-types-vectors" %} define all vector fields as `Vec<T>`.
+These must deserialize as empty (non-allocating) if the vector they are deserializing is missing or empty, and should serialize as empty except in JSON merge+patch payloads.
 
 Though uncommon, service definitions do not always match the service implementation when it comes to required fields. Upon the recommendation of the Breaking Change Reviewers, the specification is often changed to reflect the service if the service has already been deployed.
 
 {% include requirement/MUST id="rust-model-types-serde-optional" %} attribute fields with `#[serde(skip_serializing_if = "Option::is_none")]` unless an explicit `null` must be serialized.
 
-{% include requirement/MUST id="rust-model-types-non-exhaustive" %} attribute model structs with `#[non_exhaustive]`.
+{% include requirement/MUST id="rust-model-types-non-exhaustive" %} attribute response-only model structs with `#[non_exhaustive]`.
 
 This forces all downstream crates, for example, to use the `..` operator to match any remaining fields that may be added in the future for pattern binding:
 
@@ -596,6 +535,10 @@ This forces all downstream crates, for example, to use the `..` operator to matc
 
 let { foo, bar, .. } = client.method().await?.try_into()?;
 ```
+
+{% include requirement/MUSTNOT id="rust-model-types-not-non-exhaustive" %} attribute request-only or request-response model structs with `#[non_exhaustive]`.
+
+This prevents downstream crates from creating types even when using the `..Default::default()` expression, which means developers cannot construct models as plain data objects.
 
 See [RFC 2008][rust-lang-rfc-2008] for more information.
 
@@ -621,19 +564,27 @@ pub struct Example {
 
 ##### Builders {#rust-builders}
 
-Builders are an idiomatic pattern in Rust, such as the [typestate builder pattern][rust-lang-typestate] that can help guide developers into constructing a valid type variants.
+Though we prefer a `new()` constructor function to create instances, builders are still an idiomatic pattern in Rust, such as the [typestate builder pattern][rust-lang-typestate] that can help guide developers into constructing a valid type variants.
 
 {% include requirement/MAY id="rust-builders-support" %} implement builders for special cases e.g., URI builders.
 
-{% include requirement/MAY id="rust-builders-self" %} borrow or consume `self` in `with_` setter methods.
+If you do implement a builder, it must be defined according to the following guidelines:
 
-{% include requirement/MUST id="rust-builders-return" %} return an owned value from the final `build()` method.
+{% include requirement/MUST id="rust-builders-factory" %} define a `builder()` factory method on the type to be constructed that returns a struct with the same as the type + "Builder" e.g., `Model::builder()` returns a `ModelBuilder`.
+
+{% include requirement/MUST id="rust-builders-self" %} consume `mut self` in `with_` setter methods and return `Self` except in the final `build(&self)` method.
+
+{% include requirement/MUST id="rust-builders-return" %} return an owned value from the final `build(&self)` method.
+
+{% include requirement/MUST id="rust-builders-return-params" %} define required parameters in the final `build(&self)` method if not using a typestate pattern e.g., `build(&self, endpoint: &str)`.
 
 #### Enumerations {#rust-enums}
 
 {% include requirement/MUST id="rust-enums-names" %} implement all enumeration variations as PascalCase.
 
-{% include requirement/MUST id="rust-enums-derive" %} derive or implement `Clone` and `Debug` for all enums.
+{% include requirement/MUST id="rust-enums-derive" %} derive or implement `Clone`, `Eq`, and `PartialEq` for all enums.
+
+{% include requirement/SHOULDNOT id="rust-enums-debug" %} derive `Debug` since this may inadvertently leak PII. Derive [`azure_core::fmt::SafeDebug`][rust-safety-debug] instead.
 
 {% include requirement/MUST id="rust-enums-derive-copy" %} derive `Copy` for all fixed enums.
 
@@ -663,7 +614,9 @@ See [RFC 2008][rust-lang-rfc-2008] for more information.
 {% include requirement/MUST id="rust-enum-fixed" %} implement all fixed enumerations using only defined variants:
 
 ```rust
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+use azure_core::SafeDebug;
+
+#[derive(Clone, Copy, SafeDebug, Eq, PartialEq, Deserialize, Serialize)]
 #[non_exhaustive]
 pub enum FixedEnum {
     #[serde(rename = "foo")]
@@ -676,7 +629,9 @@ pub enum FixedEnum {
 {% include requirement/MUST id="rust-enum-extensible" %} implement all extensible enumerations - those which may take a variant that is not defined - using defined variants and an untagged `UnknownValue`:
 
 ```rust
-#[derive(Clone, Debug, Deserialize, Serialize)]
+use azure_core::SafeDebug;
+
+#[derive(Clone, SafeDebug, Eq, PartialEq, Deserialize, Serialize)]
 #[non_exhaustive]
 pub enum ExtensibleEnum {
     #[serde(rename = "foo")]
@@ -753,7 +708,7 @@ Crates support different types of [dependencies][rust-lang-dependencies] e.g., `
 
 ```rust
 impl ExampleClient {
-    pub fn with_connection_string(connection_string: impl Into<String>, options: Option<ExampleClientOptions>) {
+    pub fn with_connection_string(connection_string: &str, options: Option<ExampleClientOptions>) {
         todo!()
     }
 }
@@ -777,7 +732,7 @@ If your service implements a non-standard credential system - one not supported 
 namespace Azure.Security.KeyVault;
 // crate: azure_security_keyvault
 namespace Azure.Security.KeyVault.Secrets {
-    // module azure_security_keyvault::secrets
+    // module azure_security_keyvault_secrets
 }
 ```
 
@@ -790,14 +745,6 @@ pub(crate) mod helpers;
 // helpers.rs
 pub fn helper() {} // not exported publicly
 ```
-
-### Support for Mocking {#rust-mocking}
-
-In addition to [mocking clients](#rust-client-mocking):
-
-{% include requirement/MUST id="rust-mocking-model-fields" %} declare all model fields public.
-
-{% include requirement/MUST id="rust-mocking-helpers" %} define a `from()` method for all helper types like pageables and LROs that allow callers to return those types from client mocks.
 
 ## Azure SDK Library Design
 
@@ -813,29 +760,31 @@ Packages in Rust are called "crates". Crate names follow the same [general guida
 
 Rust does support dashes in crate names, but it may create confusion with customers to reference a crate like `azure-core` then import a module like `azure_core`. Many older crates do this, but the trend has been to use underscores in both cases to avoid confusion.
 
+{% include requirement/MUST id="rust-packaging-feature-name" %} use underscores, when necessary, in feature names e.g., `reqwest_rustls` to enable the `reqwest`-based HTTP client with `rustls` support for TLS.
+
+Dashes are supported in feature names as well as crate names, but using underscores in both crate names and feature names provides a consistent experience for developers.
+
 {% include requirement/MUST id="rust-packaging-registration" %} register the chosen crate name with the [Architecture Board]. Open an issue to request the crate name. See the [registered package list] for a list of the currently registered packages.
 
-{% include requirement/MUST id="rust-packaging-group" %} package different endpoints within a service that version together in a single crate but under separate modules as needed.
+{% include requirement/MUST id="rust-packaging-project" %} define a separate crate for each [TypeSpec project][rust-lang-typespec-config] within a service directory e.g.,
 
-Using Key Vault as an example and comparing with other languages like [.NET][dotnet-guidelines]:
+* `specification/keyvault/data-plane/Microsoft.KeyVault/Security.KeyVault.Secrets` -> `sdk/keyvault/azure_security_keyvault_secrets`
+* `specification/keyvault/data-plane/Microsoft.KeyVault/Security.KeyVault.Keys` -> `sdk/keyvault/azure_security_keyvault_keys`
+* `specification/keyvault/data-plane/Microsoft.KeyVault/Security.KeyVault.Certificates` -> `sdk/keyvault/azure_security_keyvault_certificates`
 
-* `Azure.Security.KeyVault.Secrets` -> `azure_security_keyvault::secrets`
-* `Azure.Security.KeyVault.Keys` -> `azure_security_keyvault::keys`
-* `Azure.Security.KeyVault.Certificates` -> `azure_security_keyvault::certificates`
-
-This makes efficient use of generated client code for each services' TypeSpec or OpenAPI specification in a statically-compiled language like Rust.
+{% include requirement/MAY id="rust-packaging-common-project" %} define a common crate under the service directory that all service client crates use. Unless there's a name conflict, this should use the "common" suffix e.g., `azure_security_keyvault_common`. The API must be public but you **MAY** document that those APIs are not intended for public use, similar to some other languages' common libraries.
 
 {% include requirement/MUSTNOT id="rust-packaging-independent" %} package multiple service specifications that version independently within the same crate.
 
 #### Directory Structure
 
-{% include requirement/MUST id="directory-structure-root" %} place all crates' source under the `sdk/` root directory using an appropriate service directory name e.g., `sdk/keyvault`. The service directory name will often match what is in the [Azure/azure-rest-api-specs](https://github.com/Azure/azure-rest-api-specs) repository and will most often be the same across Azure SDK languages.
+{% include requirement/MUST id="directory-structure-root" %} place all service directories under the `sdk/` root directory e.g., `sdk/keyvault`. The service directory name will often match what is in the [Azure/azure-rest-api-specs](https://github.com/Azure/azure-rest-api-specs) repository and will most often be the same across Azure SDK languages.
 
-{% include requirement/MUST id="directory-structure-crate" %} put all crate source within the service directory e.g., `sdk/keyvault/Cargo.toml`.
-
-If you have cause to release separate crates for a single service, please discuss first with the [Architecture Board].
+{% include requirement/MUST id="directory-structure-crate" %} put all crate source under the service directory in a subdirectory using the name of the crate e.g., `sdk/keyvault/azure_security_keyvault_secrets/Cargo.toml`. This crate directory should correspond to a TypeSpec project and the crate name configured in the TypeSpec project's [`tspconfig.yaml`][rust-lang-typespec-config].
 
 {% include requirement/SHOULD id="directory-structure-lib" %} only export public APIs from the crate `lib.rs` and define all other types in suitable [modules][rust-lang-modules]:
+
+{% include requirement/MUSTNOT id="directory-structure-build-script" %} include a `build.rs` build script in the crate root.
 
 * Single-file modules should be declared in a file next to their parent module.
 * Multi-file modules should be declared in a directory next to their parent module with a `mod.rs` file.
@@ -854,6 +803,8 @@ src/
 Cargo.lock
 Cargo.toml
 ```
+
+You can find a complete example of our directory structure in our [implementation documentation][rust-directories].
 
 #### Common Libraries
 
@@ -906,7 +857,7 @@ See <https://semver.org> for more information.
 
 Dependencies bring in many considerations that are often easily avoided by avoiding the dependency.
 
-* __Versioning__ - Many programming languages do not allow a consumer to load multiple versions of the same package. So, if we have an client library that requires v3 of package Foo and the consumer wants to use v5 of package Foo, then the consumer cannot build their application. This means that client libraries should not have dependencies by default.
+* __Versioning__ - Though Rust allows a consumer to build multiple versions of the same crate, directly depending on different versions of the same crate, or importing types or calling functions from different versions of the same crate may be unintuitive.
 * __Size__ - Consumer applications must be able to deploy as fast as possible into the cloud and move in various ways across networks. Removing additional code (like dependencies) improves deployment performance.
 * __Licensing__ - You must be conscious of the licensing restrictions of a dependency and often provide proper attribution and notices when using them.
 * __Compatibility__ - Often times you do not control a dependency and it may choose to evolve in a direction that is incompatible with your original use.
@@ -982,6 +933,22 @@ pub struct Secret {
 
 This will impact line numbers, so you should only export APIs publicly from `lib.rs`.
 
+{% include requirement/MAY id="rust-documentation-module-readme" %} include a separate `README.md` for a module as module documentation e.g., for module `http` defined in `http/mod.rs`:
+
+```rust
+#![doc = include_str!("README.md")]`
+```
+
+This would include the contents of `http/README.md`, which would render documentation for developers browing in the GitHub web UI, as well as compile and potentially run any tests you have defined as examples in the `README.md` e.g.,
+
+````markdown
+This is how you would construct a client:
+
+```rust no_run
+let client = SecretClient::new(...);
+```
+````
+
 {% include requirement/MUST id="rust-documentation-parameters" %} document all parameters. Prior to [conventional doc comment markdown headers][rust-lang-rustdoc-headings], declare an `Arguments` heading as needed (not needed for `&self`):
 
 ```rust
@@ -990,12 +957,10 @@ This will impact line numbers, so you should only export APIs publicly from `lib
 /// # Arguments
 ///
 /// * `name` - The name of the secret.
-/// * `value` - The value of the secret.
 /// * `options` - Optional properties of the secret.
 async fn set_secret(
     &self,
-    name: impl Into<String>,
-    value: impl Into<String>,
+    name: &str,
     options: Option<SetSecretMethodOptions>,
 ) -> Result<Response>;
 ```
@@ -1047,7 +1012,7 @@ As you write your code, _document it so you never hear about it again._ The less
 
 {% include requirement/SHOULDNOT id="rust-doc-samples-main" %} include the `main` function in the signature, if even necessary e.g., for showing async examples.
 
-```rust
+````rust
 /// ``` no_run
 /// # async fn main() {
 ///     let client = SecretClient::new("https://myvault.vault.azure.net", Arc::new(DefaultAzureCredential::default()), None).unwrap();
@@ -1055,7 +1020,7 @@ As you write your code, _document it so you never hear about it again._ The less
 ///     println!("{secret:?}");
 /// # }
 /// ```
-```
+````
 
 {% include requirement/MUST id="rust-doc-samples-no-run" %} attribute code fences with `no_run` if the code cannot or should not run when running `cargo test`. There are additional [documentation test attributes][rust-lang-rustdoc-tests-attributes] that may be of interest.
 
@@ -1081,7 +1046,7 @@ This prevents noisy subsequent pull requests if another maintainer formats sourc
 
 {% include requirement/MUST id="rust-repository-readme-file" %} have a `README.md` file in the component root folder.
 
-An example of a good `README.md` file can be found [here](https://github.com/Azure/azure-sdk-for-rust/blob/main/sdk/core/README.md).
+An example of a good `README.md` file can be found [here](https://github.com/Azure/azure-sdk-for-rust/blob/main/sdk/core/azure_core/README.md).
 
 {% include requirement/MUST id="rust-repository-readme-consumer" %} optimize the `README.md` for the consumer of the client library.
 
@@ -1097,6 +1062,25 @@ The example file names are compiled into executes with the same name as the sour
 To facilitate this, preface your example name with the client name - converting PascalCase type name to snake_case - or, if still ambiguous, the service directory or crate name e.g., `secret_client_set_secret.rs` or `keyvault_secret_client_set_secret.rs`.
 
 See Cargo's [project layout][rust-lang-project-layout] for more information about conventional directories.
+
+{% include requirement/SHOULD id="rust-repo-samples-question-operator" %} use the `?` operator to handle errors or optional values as much as possible.
+This does mean that your sample method - including main - should return a `Result<T, E>`. This can be specific like `azure_core::Result<T>` if suitable,
+or generic like `std::result::Result<(), Box<dyn std::error::Error>>` (`std::result::Result` is imported by default) e.g.,
+
+````markdown
+```rust
+use azure_identity::DefaultAzureCredential;
+use azure_security_keyvault_secrets::SecretClient;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let credential = DefaultAzureCredential::new()?;
+    let client = SecretClient::new("https://my-vault.vault.azure.net", credential.clone(), None)?;
+    // ...
+
+    Ok(())
+}
+```
+````
 
 <!-- Links -->
 

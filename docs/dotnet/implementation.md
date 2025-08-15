@@ -91,7 +91,7 @@ Public service methods should follow the below parameter presence and ordering g
 1. LRO Qualifier: This indicates if the user wants to wait for the LRO to simply start or wait for completion.
     * If present this {% include requirement/MUST id="dotnet-parameter-lro-qualifier-type" %} be the type defined in `Azure.Core` [here](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/core/Azure.Core/src/WaitUntil.cs).
     * If present this {% include requirement/MUST id="dotnet-parameter-lro-qualifier-required" %} be a required parameter.
-    * If present this {% include requirement/MUST id="dotnet-parameter-lro-qualifier-required" %} be the first parameter.
+    * If present this {% include requirement/MUST id="dotnet-parameter-lro-qualifier-first" %} be the first parameter.
     * For LRO this {% include requirement/SHOULD id="dotnet-parameter-lro-qualifier-presence" %} be the present.
 
 2. Required Path: These are parameters that will go in the path of the URI.
@@ -587,7 +587,7 @@ TODO: Add guidance regarding user agent strings
 
 ### Integration with ASP.NET Core
 
-All Azure client libraries ship with a set of extension methods that provide integration with ASP.NET Core applications by registering clients with DependencyInjection container, flowing Azure SDK logs to ASP.NET Core logging subsystem and providing ability to use configuration subsystem for client configuration (for more examples see https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/core/Microsoft.Extensions.Azure)
+All Azure client libraries ship with a set of extension methods that provide integration with ASP.NET Core applications by registering clients with DependencyInjection container, flowing Azure SDK logs to ASP.NET Core logging subsystem and providing ability to use configuration subsystem for client configuration (for more examples see https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/extensions/Microsoft.Extensions.Azure)
 
 {% include requirement/MUST id="dotnet-builder-class-name" %} provide a single `*ClientBuilderExtensions` class for every Azure SDK client library that contains client types. Name of the type should use the same prefix as the `*ClientOptions` class used across the library. For example: `SecretClientBuilderExtensions`, `BlobClientBuilderExtensions`
 

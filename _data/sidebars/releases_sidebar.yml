@@ -17,6 +17,8 @@ entries:
       url: /releases/latest/go.html
     - title: C++
       url: /releases/latest/cpp.html
+    - title: Rust
+      url: /releases/latest/rust.html
     - title: Embedded C
       url: /releases/latest/c.html
     - title: Android
@@ -25,8 +27,36 @@ entries:
       url: /releases/latest/ios.html
     - title: Specs
       url: /releases/latest/specs.html
+  - title: 2025 Releases
+    folderitems:
+    - title: August
+      url: /releases/2025-08/index.html
+    - title: July
+      url: /releases/2025-07/index.html
+    - title: June
+      url: /releases/2025-06/index.html
+    - title: May
+      url: /releases/2025-05/index.html
+    - title: April
+      url: /releases/2025-04/index.html
+    - title: March
+      url: /releases/2025-03/index.html
+    - title: February
+      url: /releases/2025-02/index.html
+    - title: January
+      url: /releases/2025-01/index.html
   - title: 2024 Releases
     folderitems:
+    - title: November
+      url: /releases/2024-11/index.html
+    - title: October
+      url: /releases/2024-10/index.html
+    - title: September
+      url: /releases/2024-09/index.html
+    - title: August
+      url: /releases/2024-08/index.html
+    - title: July
+      url: /releases/2024-07/index.html
     - title: June
       url: /releases/2024-06/index.html
     - title: May

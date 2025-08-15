@@ -158,7 +158,7 @@ function CheckRequiredLinks($linkTemplates, $pkg, $version)
   return $valid
 }
 
-function GetFirstGADate($pkgVersion, $pkg, $gaVersions)
+function GetFirstGADate($pkg, $gaVersions)
 {
   if ($gaVersions.Count -gt 0) {
     $gaIndex = $gaVersions.Count - 1;
@@ -180,6 +180,34 @@ function GetFirstGADate($pkgVersion, $pkg, $gaVersions)
     if ($committeDate) {
       $committeDate = $committeDate.ToString("MM/dd/yyyy")
       Write-Host "For package '$($pkg.Package)' picking GA '$($gaVersion.RawVersion)' shipped on '$committeDate' as the first new GA date."
+      return $committeDate
+    }
+  }
+  return ""
+}
+
+function GetFirstPreviewDate($pkg, $previewVersions)
+{
+  if ($previewVersions.Count -gt 0) {
+    $previewIndex = $previewVersions.Count - 1;
+    $otherPackage = $global:otherPackages.Where({ $_.Package -eq $pkg.Package })
+
+    if ($otherPackage.Count -gt 0 -and $otherPackage[0].VersionPreview) {
+      Write-Verbose "Found other package entry for '$($pkg.Package)'";
+      for ($i = 0; $i -lt $previewVersions.Count; $i++) {
+        if ($otherPackage[0].VersionPreview -eq $previewVersions[$i].RawVersion) {
+          Write-Verbose "Found older package entry for '$($pkg.Package)' Preview version of $($otherPackage[0].VersionPreview) so picking the next Preview for first Preview date."
+          $gaIndex = ($i - 1)
+        }
+      }
+    }
+    if ($previewIndex -lt 0) { return "" }
+    $previewVersion = $previewVersions[$previewIndex]
+    $committeDate = $previewVersion.Date -as [DateTime]
+
+    if ($committeDate) {
+      $committeDate = $committeDate.ToString("MM/dd/yyyy")
+      Write-Host "For package '$($pkg.Package)' picking Preview '$($previewVersion.RawVersion)' shipped on '$committeDate' as the first new Preview date."
       return $committeDate
     }
   }
@@ -216,6 +244,7 @@ function Update-Packages($lang, $packageList, $langVersions, $langLinkTemplates)
     $versions = [AzureEngSemanticVersion]::SortVersions($versions)
 
     $latestPreview = $versions[0].RawVersion
+    $previewVersions = $versions.Where({ $_.IsPrerelease })
     $gaVersions = $versions.Where({ !$_.IsPrerelease })
     if ($gaVersions.Count -ne 0)
     {
@@ -250,11 +279,16 @@ function Update-Packages($lang, $packageList, $langVersions, $langLinkTemplates)
 
     if ($pkg.VersionGA) {
       if (!$pkg.FirstGADate) {
-        $pkg.FirstGADate = GetFirstGADate $pkgVersion $pkg $gaVersions
+        $pkg.FirstGADate = GetFirstGADate $pkg $gaVersions
       }
-      $pkg.LatestGADate = $latestGADate
+      if ($latestGADate) {
+        $pkg.LatestGADate = $latestGADate
+      }
     }
 
+    if (!$pkg.FirstPreviewDate) {
+      $pkg.FirstPreviewDate = GetFirstPreviewDate $pkg $previewVersions
+    }
     $version = $latestPreview
 
     if ($compareTagVsGHIOVersions) {
@@ -409,7 +443,37 @@ function CheckAll($langs)
   }
 }
 
-if ($language -eq 'check') {
+function DumpAllShippedPackage()
+{
+  $packageList = @()
+  foreach ($lang in $languageNameMapping.Keys)
+  {
+    $langName = Get-LanguageName $lang
+
+    $packageVersions = GetPackageVersions $lang -afterDate ([DateTime]::Now.AddYears(-10))
+    Write-Host "Found $($packageVersions.Values.Count) packages for language $langName"
+
+    foreach ($pkg in $packageVersions.Values)
+    {
+      foreach ($pkgVersion in $pkg.Versions) 
+      {
+        $packageList += [PSCustomObject][ordered]@{
+          Language = $langName
+          Package = $pkg.Package
+          Version = $pkgVersion.RawVersion
+          Date = $pkgVersion.Date
+        }
+      }
+    }
+  }
+
+  Set-Content -Path "shipped-packages.csv" -Value ($packageList | ConvertTo-Csv -NoTypeInformation)
+}
+
+if ($language -eq "allShipped") {
+  DumpAllShippedPackage
+}
+elseif ($language -eq 'check') {
   CheckAll $languageNameMapping.Keys
 }
 elseif ($language -eq 'all') {

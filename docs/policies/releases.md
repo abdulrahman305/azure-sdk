@@ -330,10 +330,7 @@ When publishing an npm package, [npm distribution tags](https://docs.npmjs.com/c
 Below are the guidelines for versions to use:
 
 - Stable releases will follow [SemVer](https://semver.org/) and the published package will get the tag `latest`.
-  - If a hotfix is being shipped for a version older than the current GA version, then the hotfix version does not get any tags.
-  - If a package has moved from beta to stable, then `next` tag is deleted from beta and latest tag will be set for stable version.
-- Beta releases will use the format `X.Y.Z-beta.N` for version and the published package will get the tag `next`.
-  - Package version will also get `latest` tag **only** if the package has never had a stable release.
+- Beta releases will use the format `X.Y.Z-beta.N` for version and the published package will get the tag `beta`.
 - Daily alpha releases will use the format `X.Y.Z-alpha.YYYYMMDD.r` (`r` is based on the number of builds performed on the given day) and the latest published package will have the `dev` tag and published to npm. To consume a alpha package either pin to a specific version or use the `dev` tag as the version.
 
 ##### Incrementing after release (JS)
@@ -353,14 +350,6 @@ In rare cases where a customer does not wish to take all bugfixes for a particul
 In general, packages that have a stable release are not expected to have additional beta releases unless the underlying service releases preview functionality or the package undergoes significant churn as part of a major version change.
 
 Packages which depend on a released package should float to the latest compatible major version (e.g. `^1.0.0`). Because we're using SemVer only breaking changes alter the major version number and all minor and patch changes should be compatible. The version number should only be updated for a major version change.
-
-Dependencies older than the latest published version can be listed by running the following commands:
-
-```bash
-rush unlink
-git clean -xdf
-rush update --full
-```
 
 #### .NET
 
@@ -383,7 +372,7 @@ Beta packages will be published to NuGet with the pre-release designation. Alpha
 
 #### Java
 
-Maven supports the [convention](https://cwiki.apache.org/confluence/display/MAVENOLD/Versioning) `MAJOR.MINOR.PATCH-QUALIFIER`, which doesn't support SemVer 2 sorting for pre-releases so we have to use a special convention based on their [versioning code](https://github.com/apache/maven/blob/master/maven-artifact/src/main/java/org/apache/maven/artifact/versioning/ComparableVersion.java). The preferred format for version numbers is:
+Maven supports the [convention](https://cwiki.apache.org/confluence/display/MAVENOLD/Versioning) `MAJOR.MINOR.PATCH-QUALIFIER`, which doesn't support SemVer 2 sorting for pre-releases so we have to use a special convention based on their [versioning code](https://github.com/apache/maven/blob/master/compat/maven-artifact/src/main/java/org/apache/maven/artifact/versioning/ComparableVersion.java). The preferred format for version numbers is:
 
 - `X.Y.Z-alpha.YYYYMMDD.r` (`r` is based on the number of builds performed on the given day) for daily alpha releases.
 - `X.Y.Z-beta.N` for beta releases.
@@ -404,7 +393,7 @@ Beta packages are published directly to the Maven central registry. Alpha packag
 
 C++ releases the source code of the package via releases on github. It currently does not ship packages to any package managers.
 
-A C++ release includes a Tag and Release (e.g. [azure-core_1.0.0-beta.1](https://github.com/Azure/azure-sdk-for-cpp/releases/tag/azure-core_1.0.0-beta.1)) on GitHub and documentation as GitHub Pages (e.g. [azure-core_1.0.0-beta.1](https://azuresdkdocs.blob.core.windows.net/$web/cpp/azure-core/1.0.0-beta.1/index.html)).
+A C++ release includes a Tag and Release (e.g. [azure-core_1.14.1](https://github.com/Azure/azure-sdk-for-cpp/releases/tag/azure-core_1.14.1)) on GitHub and documentation as GitHub Pages (e.g. [azure-core_1.14.1](https://azuresdkdocs.z19.web.core.windows.net/cpp/azure-core/1.14.1/index.html)).
 
 #### Incrementing after release (C++)
 
@@ -418,7 +407,7 @@ A C++ release includes a Tag and Release (e.g. [azure-core_1.0.0-beta.1](https:/
 
 C99 releases the source code of the repository in a single unit of source code. It does not ship packages to any package managers. Because the C repo ships from the `main` branch, code going into the `main` branch must be in a completed state and ready to ship.
 
-An Embedded C release includes a Tag and Release (e.g. [1.0.0-preview.5](https://github.com/Azure/azure-sdk-for-c/releases/tag/1.0.0-preview.5)) on GitHub and documentation as GitHub Pages (e.g. [1.0.0-preview.5](https://azuresdkdocs.blob.core.windows.net/$web/c/az_core/1.0.0-preview.5/index.html)).
+An Embedded C release includes a Tag and Release (e.g. [1.5.0](https://github.com/Azure/azure-sdk-for-c/releases/tag/1.5.0)) on GitHub and documentation as GitHub Pages (e.g. [1.5.0](https://azuresdkdocs.z19.web.core.windows.net/c/az_core/1.5.0/index.html)).
 
 #### Incrementing after release (Embedded C)
 
@@ -430,7 +419,7 @@ An Embedded C release includes a Tag and Release (e.g. [1.0.0-preview.5](https:/
 
 #### Android
 
-Maven supports the [convention](https://cwiki.apache.org/confluence/display/MAVENOLD/Versioning) `MAJOR.MINOR.PATCH-QUALIFIER`, which doesn't support SemVer 2 sorting for pre-releases so we have to use a special convention based on their [versioning code](https://github.com/apache/maven/blob/master/maven-artifact/src/main/java/org/apache/maven/artifact/versioning/ComparableVersion.java). The preferred format for version numbers is:
+Maven supports the [convention](https://cwiki.apache.org/confluence/display/MAVENOLD/Versioning) `MAJOR.MINOR.PATCH-QUALIFIER`, which doesn't support SemVer 2 sorting for pre-releases so we have to use a special convention based on their [versioning code](https://github.com/apache/maven/blob/master/compat/maven-artifact/src/main/java/org/apache/maven/artifact/versioning/ComparableVersion.java). The preferred format for version numbers is:
 
 - `X.Y.Z-alpha.YYYYMMDD.r` (`r` is based on the number of builds performed on the given day) for daily alpha releases.
 - `X.Y.Z-beta.N` for beta releases.

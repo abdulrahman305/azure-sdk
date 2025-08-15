@@ -12,6 +12,7 @@ $languageNameMapping = @{
   go = "Go" # -- No csv or tagging info
   ios = "iOS" # -- These don't follow normal tagging rules
   android = "Android" # -- These don't follow normal tagging/githubio rules
+  rust = "Rust"
 }
 
 function CreatePackage(
@@ -61,6 +62,7 @@ function CreatePackage(
     PlannedVersions = ""
     LatestGADate = ""
     FirstGADate = ""
+    FirstPreviewDate = ""
     Support = ""
     EOLDate = ""
     Hide = ""
@@ -93,6 +95,7 @@ function ClonePackage($pkg)
     PlannedVersions = $pkg.PlannedVersions
     LatestGADate = $pkg.LatestGADate
     FirstGADate = $pkg.FirstGADate
+    FirstPreviewDate = $pkg.FirstPreviewDate
     Support = $pkg.Support
     EOLDate = $pkg.EOLDate
     Hide = $pkg.Hide
