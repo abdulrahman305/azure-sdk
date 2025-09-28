@@ -55,7 +55,22 @@ function Get-java-Packages
   {
     if ($packages.Package -notcontains $tag) {
       $version = [AzureEngSemanticVersion]::SortVersions($repoTags[$tag].Versions)[0]
-      Write-Warning "${tag}_${version} - Didn't find this package using the maven search $baseMavenQueryUrl"
+      Write-Host "${tag}_${version} - Didn't find this package using the maven search $baseMavenQueryUrl, so falling back to direct query for this package."
+      
+      # fallback to guess a groupId, and query maven central repository for the artifact
+      $artifactId = $tag
+      $groupId = "com.azure"
+      if ($tag.StartsWith("azure-resourcemanager-")) {
+        $groupId = "com.azure.resourcemanager"
+      }
+      $groupPath = $groupId.Replace(".","/")
+      $mavenUrl = "https://repo1.maven.org/maven2/$groupPath/$artifactId/$version/$artifactId-$version.pom"
+      try {
+        $mavenQuery = Invoke-RestMethod $mavenUrl -MaximumRetryCount 3
+        $packages += CreatePackage $artifactId $version $groupId
+      } catch {
+        Write-Warning "${tag}_${version} - Didn't find this package using the maven central repository $mavenUrl - $($_.Exception.Message)"
+      }
     }
   }
 
@@ -149,7 +164,17 @@ function Get-js-Packages
   }
 
   Write-Host "Found $($publishedPackages.Count) npm packages"
-  $packages = $publishedPackages | Foreach-Object { CreatePackage $_.name $_.version }
+  $packages = $publishedPackages | Foreach-Object {
+    $version = $_.version
+    if ($_.version -match "-alpha") {
+      $pkgInfo = Invoke-RestMethod "https://registry.npmjs.com/$($_.name)"
+      if ($pkgInfo."dist-tags".PSObject.Properties.Name -contains "beta") {
+        # Replace version with latest beta if the latest tag is an alpha version
+        $version = $pkgInfo."dist-tags"."beta"
+      }
+    }
+    CreatePackage $_.name $version
+  }
 
   $repoTags = GetPackageVersions "js"
 
